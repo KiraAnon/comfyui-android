@@ -11,13 +11,22 @@ $ROOT = $PSScriptRoot
 
 # ---- 签名密码（不硬编码） ----
 $KS_PASS = $env:KATORCH_KS_PASS
+$KS_PASS_FILE = Join-Path $PSScriptRoot '.kspass'
 if ([string]::IsNullOrWhiteSpace($KS_PASS)) {
-    $KS_PASS = -join ((48..57) + (97..122) | Get-Random -Count 20 | ForEach-Object { [char]$_ })
-    Write-Host ''
-    Write-Host '!! 没设 $env:KATORCH_KS_PASS，已随机生成一个：' -ForegroundColor Yellow
-    Write-Host "   $KS_PASS" -ForegroundColor Yellow
-    Write-Host '   请保存好！换了密码就没法覆盖升级已装的 app。' -ForegroundColor Yellow
-    Write-Host ''
+    if (Test-Path $KS_PASS_FILE) {
+        # 密码持久化在 app\.kspass（已 gitignore）。以前只打印到屏幕，
+        # 第二次编译就换了密码、签不了名，只能卸载重装，坑过一次。
+        $KS_PASS = (Get-Content $KS_PASS_FILE -Raw).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($KS_PASS)) {
+        $KS_PASS = -join ((48..57) + (97..122) | Get-Random -Count 20 | ForEach-Object { [char]$_ })
+        [System.IO.File]::WriteAllText($KS_PASS_FILE, $KS_PASS, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host ''
+        Write-Host "!! 已生成签名密码并保存到 $KS_PASS_FILE" -ForegroundColor Yellow
+        Write-Host "   $KS_PASS" -ForegroundColor Yellow
+        Write-Host '   这个文件别删，删了就签不了名、只能卸载重装。' -ForegroundColor Yellow
+        Write-Host ''
+    }
 }
 $KS_ALIAS = if ($env:KATORCH_KS_ALIAS) { $env:KATORCH_KS_ALIAS } else { 'comfyui' }
 
