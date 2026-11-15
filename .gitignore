@@ -1,0 +1,50 @@
+# 敏感文件（绝对不能提交）
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+*.idsig
+local.properties
+
+# 构建产物
+app/build/
+app/out/
+build/
+out/
+*.apk
+*.aab
+*.aar
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 日志与临时
+*.log
+*.tmp
+*.bak
+*.bak-*
+out_tail.txt
+
+# 模型与 NPU 产物（太大，不进仓库）
+*.safetensors
+*.ckpt
+*.gguf
+*.dla
+blobs*/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# 个人配置
+*.local.md
+private/
+secrets/

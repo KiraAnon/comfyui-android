@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ComfyUI 图标底色：深紫黑（官方 logo 的 #211927），和前景的深色块同色，
+         这样自适应图标裁切后不会出现突兀的边 -->
+    <color name="ic_launcher_background">#211927</color>
+</resources>

@@ -1,0 +1,31 @@
+# 换行符策略
+# shell 脚本和 Python 必须是 LF，否则在 Android/Linux 上会报
+#   bad interpreter: /bin/sh^M: no such file or directory
+* text=auto
+
+*.sh      text eol=lf
+*.py      text eol=lf
+*.md      text eol=lf
+*.json    text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.java    text eol=lf
+*.xml     text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# PowerShell 脚本在 Windows 上跑，用 CRLF 更省心
+*.ps1     text eol=crlf
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+
+# 二进制文件不要动
+*.apk     binary
+*.jks     binary
+*.keystore binary
+*.ico     binary
+*.png     binary
+*.jpg     binary
+*.wasm    binary
+*.dla     binary
+*.safetensors binary
