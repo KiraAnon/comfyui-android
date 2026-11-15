@@ -135,8 +135,9 @@ pgrep -f "main.py --cpu"
 - **只支持 512×512**。换分辨率要重编 16 块 NPU blob（约 40 分钟），静态图 NPU 的硬约束。
 - **画布 25fps**。litegraph 是单线程 JS 渲染，除非重写渲染层。
 - **横屏键盘占屏严重**。试过 4 种输入法方案都没解决，详见 HANDOFF「试了但没成的」。
-- **NPU 加速部分不在本仓库**。那是 [KAtorch](https://github.com/) 的工作（另一套 PyTorch→MDLA 编译器），
-  本仓库只负责「把 ComfyUI 变成手机 app」这一层，通过标准 ComfyUI 节点接口对接。
+- **NPU 加速部分不在本仓库**。那是 [KAtorch](https://github.com/KiraAnon/katorch) 的工作
+  （另一套 PyTorch→MDLA 编译器），本仓库只负责「把 ComfyUI 变成手机 app」这一层，
+  通过标准 ComfyUI 节点接口对接。
 
 ---
 
@@ -156,12 +157,49 @@ pgrep -f "main.py --cpu"
 
 ---
 
+## ⚠️ KAtorch 节点的验证状态（重要）
+
+**本仓库不包含 NPU 节点**，那些在 [katorch](https://github.com/KiraAnon/katorch) 仓库。
+
+但有一点必须提前说清楚：**那 13 个节点不是全都跑过。**
+
+| 分类 | 已验证 | 未验证 |
+|---|---|---|
+| **节点**（13 个） | 9 个（加载/编码/采样/VAE 全链路） | **4 个**（LoraLoader / ModelInfo / FreeMemory / ClearCondCache） |
+| **采样器**（3 个） | `er_sde` / `euler` | **`heun`** |
+| **调度器**（6 个） | `beta` / `linear` | **4 个**（normal / karras / sgm_uniform / simple） |
+| **分辨率** | 512×512 | 其他全部；**800×1424 已知会把手机拖到重启** |
+| **功能** | 文生图 / 图生图 | LoRA / cfg>1 未系统验证 |
+
+**完整表格见** [katorch/katorch_nodes/README.md 的「验证状态」章节](https://github.com/KiraAnon/katorch/blob/main/katorch_nodes/README.md)。
+
+### 我们的测试机配置
+
+所有 ✅ 都来自这一台，换机器要重测：
+
+| 项 | 值 |
+|---|---|
+| 机型 | OB-A98 |
+| SoC | MediaTek MT6897 / Dimensity 8300 |
+| NPU | MDLA 5.0 |
+| 系统 | Android 15 |
+| 内存 | 15.8 GB |
+| Termux | 0.118.3（侧载，非 Play 版） |
+| Python | 3.14.10 |
+| torch | 2.15.0（CPU only） |
+
+> **换一台机器**：同代 MTK 芯片理论可用，但 opcode 支持度、IOVA 配额、
+> 编译器能不能过都可能不同。别的芯片上，所有 ✅ 都得重新测。
+
+---
+
 ## 贡献
 
-欢迎提 issue——尤其是**在其他芯片/机型上的实测数据**。目前只在 MT6897 上验证过，
-其他 MTK 芯片（同样是 MDLA 5.0）理论上可用但没测。
+欢迎提 issue——**尤其是其他芯片/机型上的实测数据**。
+目前只在 MT6897 上验证过，其他 MTK 芯片（同为 MDLA 5.0）理论上可用但没测。
 
-如果你在别的机器上跑通了，欢迎贴一份 `docs/install-root.md` 里的实测表。
+如果你在别的机器上跑通了，欢迎贴一份 `docs/install-root.md` 里的实测表；
+如果某个上面标 ⚠️ 的东西你跑通了，也欢迎提 PR 把它改成 ✅。
 
 ---
 

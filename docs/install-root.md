@@ -113,6 +113,29 @@ cp -r <KAtorch>/katorch_nodes/katorch_npu ~/ComfyUI/custom_nodes/
 # 重启 ComfyUI，看到 "KAtorch 节点 v2.0.0 已加载（13 个节点）" 就对了
 ```
 
+### ⚠️ 这 13 个节点不是全都跑过
+
+装完别以为所有选项都能用。实测状态：
+
+| 分类 | 已验证 | 未验证 |
+|---|---|---|
+| **节点**（13 个） | 9 个（加载 / 编码 / 采样 / VAE 全链路） | **4 个**：`KAtorchLoraLoader` / `KAtorchModelInfo` / `KAtorchFreeMemory` / `KAtorchClearCondCache` |
+| **采样器**（3 个） | `er_sde` / `euler` | **`heun`** |
+| **调度器**（6 个） | `beta` / `linear` | **4 个**：`normal` / `karras` / `sgm_uniform` / `simple` |
+| **分辨率** | **512×512** | 其他全部（要重编 16 块 blob） |
+| **功能** | 文生图 / 图生图 | LoRA（预合并）/ `cfg > 1` 未系统验证 |
+
+**完整表格 + 硬件前提**见
+[katorch/katorch_nodes/README.md 的「验证状态」章节](https://github.com/KiraAnon/katorch/blob/main/katorch_nodes/README.md)。
+
+**建议的上手顺序**：
+
+1. 先用默认的 `er_sde` + `beta` + 512×512 跑通（这是唯一充分验证的组合）
+2. 再试 `euler` + `linear`（也验证过）
+3. **其余选项自己试之前，先做好可能出不了图的心理准备**——它们代码在，但从没跑过
+
+**换底模**要重新编译 blob，见 [HANDOFF.md](HANDOFF.md) 第六·六章。
+
 ---
 
 ## 第 4 步：启动后端（root）
