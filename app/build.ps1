@@ -21,13 +21,100 @@ if ([string]::IsNullOrWhiteSpace($KS_PASS)) {
 }
 $KS_ALIAS = if ($env:KATORCH_KS_ALIAS) { $env:KATORCH_KS_ALIAS } else { 'comfyui' }
 
-# ---- Android SDK / JDK（可用环境变量覆盖） ----
-$SDK = if ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT }
-       elseif ($env:ANDROID_HOME) { $env:ANDROID_HOME }
-       else { 'D:\AndroidSdk' }
-$BT = Join-Path $SDK 'build-tools\35.0.0'
-$ANDROID_JAR = Join-Path $SDK 'platforms\android-35\android.jar'
-$JAVA_HOME = if ($env:JAVA_HOME) { $env:JAVA_HOME } else { 'C:\Program Files\Java\jdk-21.0.10' }
+# ---- 自动探测 Android SDK / JDK ----
+# 优先级：环境变量 > 常见安装位置 > PATH
+
+function Find-Sdk {
+    # 1. 环境变量
+    foreach ($v in @($env:ANDROID_SDK_ROOT, $env:ANDROID_HOME, $env:ANDROID_SDK)) {
+        if ($v -and (Test-Path (Join-Path $v 'platform-tools'))) { return $v }
+    }
+    # 2. 常见安装位置
+    $cands = @(
+        (Join-Path $env:LOCALAPPDATA 'Android\Sdk'),
+        (Join-Path $env:USERPROFILE 'AppData\Local\Android\Sdk'),
+        'C:\Android\Sdk',
+        'D:\Android\Sdk',
+        'D:\AndroidSdk',
+        '/usr/lib/android-sdk'
+    )
+    foreach ($c in $cands) {
+        if ($c -and (Test-Path $c) -and (Test-Path (Join-Path $c 'platforms'))) { return $c }
+    }
+    return $null
+}
+
+function Find-Jdk {
+    foreach ($v in @($env:JAVA_HOME, $env:JDK_HOME)) {
+        if ($v -and (Test-Path (Join-Path $v 'bin\javac.exe'))) { return $v }
+    }
+    # 从 PATH 找 javac
+    $jc = Get-Command javac.exe -ErrorAction SilentlyContinue
+    if ($jc) { return (Split-Path (Split-Path $jc.Source -Parent) -Parent) }
+    # 常见位置
+    $cands = @(
+        'C:\Program Files\Java\jdk-21',
+        'C:\Program Files\Java\jdk-17',
+        'C:\Program Files\Android\Android Studio\jbr'
+    )
+    foreach ($c in $cands) {
+        if (Test-Path (Join-Path $c 'bin\javac.exe')) { return $c }
+    }
+    # 扫 Program Files\Java 下所有 jdk-*
+    if (Test-Path 'C:\Program Files\Java') {
+        $d = Get-ChildItem 'C:\Program Files\Java' -Directory -Filter 'jdk*' -ErrorAction SilentlyContinue |
+             Sort-Object Name -Descending | Select-Object -First 1
+        if ($d -and (Test-Path (Join-Path $d.FullName 'bin\javac.exe'))) { return $d.FullName }
+    }
+    return $null
+}
+
+function Find-LatestDir($parent, $pattern) {
+    if (-not (Test-Path $parent)) { return $null }
+    $d = Get-ChildItem $parent -Directory -Filter $pattern -ErrorAction SilentlyContinue |
+         Sort-Object { [version]($_.Name -replace '[^\d.]', '') } -Descending -ErrorAction SilentlyContinue |
+         Select-Object -First 1
+    if ($d) { return $d.FullName }
+    # 版本解析失败时退回名字排序
+    $d = Get-ChildItem $parent -Directory -Filter $pattern -ErrorAction SilentlyContinue |
+         Sort-Object Name -Descending | Select-Object -First 1
+    if ($d) { return $d.FullName }
+    return $null
+}
+
+$SDK = Find-Sdk
+if (-not $SDK) {
+    throw @'
+找不到 Android SDK。任选一种方式：
+  1. 设环境变量： $env:ANDROID_SDK_ROOT = '你的 SDK 路径'
+  2. 或用 Android Studio 的 SDK Manager 装到默认位置
+  3. 或装 commandline-tools 后跑： sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+'@
+}
+
+$BT = Find-LatestDir (Join-Path $SDK 'build-tools') '*'
+if (-not $BT) { throw "SDK 里没有 build-tools：$SDK\build-tools（需要 sdkmanager 装）" }
+
+$PLAT = Find-LatestDir (Join-Path $SDK 'platforms') 'android-*'
+if (-not $PLAT) { throw "SDK 里没有 platforms：$SDK\platforms（需要 sdkmanager 装 android-35）" }
+$ANDROID_JAR = Join-Path $PLAT 'android.jar'
+$API_LEVEL = (Split-Path $PLAT -Leaf) -replace 'android-', ''
+
+$JAVA_HOME = Find-Jdk
+if (-not $JAVA_HOME) {
+    throw @'
+找不到 JDK（需要 17+）。任选一种方式：
+  1. 设环境变量： $env:JAVA_HOME = '你的 JDK 路径'
+  2. 或装一个： winget install Microsoft.OpenJDK.21
+  3. 或装 Android Studio（自带 JBR）
+'@
+}
+
+Write-Host ("   SDK      : {0}" -f $SDK)
+Write-Host ("   build-tools: {0}" -f (Split-Path $BT -Leaf))
+Write-Host ("   platform : {0} (API {1})" -f (Split-Path $PLAT -Leaf), $API_LEVEL)
+Write-Host ("   JDK      : {0}" -f $JAVA_HOME)
+Write-Host ''
 
 $AAPT2 = Join-Path $BT 'aapt2.exe'
 $D8 = Join-Path $BT 'd8.bat'
@@ -37,8 +124,12 @@ $JAVAC = Join-Path $JAVA_HOME 'bin\javac.exe'
 $JAR = Join-Path $JAVA_HOME 'bin\jar.exe'
 $KEYTOOL = Join-Path $JAVA_HOME 'bin\keytool.exe'
 
+$missing = @()
 foreach ($p in @($AAPT2, $D8, $ZIPALIGN, $APKSIGNER, $ANDROID_JAR, $JAVAC)) {
-    if (-not (Test-Path $p)) { throw "缺少构建工具：$p（先跑 sdkmanager 装 platforms;android-35 + build-tools;35.0.0）" }
+    if (-not (Test-Path $p)) { $missing += $p }
+}
+if ($missing.Count -gt 0) {
+    throw ("缺少构建工具：`n  " + ($missing -join "`n  ") + "`n`n跑一下： sdkmanager ""build-tools;35.0.0"" ""platforms;android-35""")
 }
 
 $BUILD = Join-Path $ROOT 'build'
@@ -113,7 +204,26 @@ Write-Host ("   产物：{0}  ({1:N0} KB)" -f $apk, ((Get-Item $apk).Length / 1K
 
 if ($Install) {
     Write-Host '== 安装到手机'
-    $ADB = 'D:\comfyui\platform-tools\adb.exe'
+
+    # adb 查找：环境变量 > SDK 里的 platform-tools > PATH
+    $ADB = $null
+    if ($env:ADB) { $ADB = $env:ADB }
+    if (-not $ADB) {
+        $cand = Join-Path $SDK 'platform-tools\adb.exe'
+        if (Test-Path $cand) { $ADB = $cand }
+    }
+    if (-not $ADB) {
+        $cmd = Get-Command adb -ErrorAction SilentlyContinue
+        if ($cmd) { $ADB = $cmd.Source }
+    }
+    if (-not $ADB) {
+        throw "找不到 adb。设 `$env:ADB = 'adb 路径'，或用 sdkmanager 装 platform-tools"
+    }
+
+    # 先确认有设备
+    $devs = & $ADB devices 2>&1 | Select-Object -Skip 1 | Where-Object { $_ -match '\sdevice$' }
+    if (-not $devs) { throw '没有连接的 Android 设备（先开 USB 调试并授权）' }
+
     & $ADB install -r $apk
     if ($LASTEXITCODE -ne 0) { throw 'adb install 失败' }
     Write-Host '   已安装'

@@ -63,16 +63,44 @@ Runtime.getRuntime().exec(new String[]{"su", "-t", "1", "-c", cmd});
 ## 构建
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File F:\KAtorch\katorch_app\build.ps1 -Install
+# 在本目录下
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Install
 ```
 
 不用 Gradle，直接 `aapt2 → javac → d8 → zipalign → apksigner` 手工流水线，
-产物 `KAtorch.apk` 只有 17KB。
+产物 `ComfyUI.apk` 只有 20KB 左右。
 
-依赖（已装在 `D:\AndroidSdk`）：
-- `platforms;android-35`
-- `build-tools;35.0.0`
-- JDK 21（`C:\Program Files\Java\jdk-21.0.10`）
+### 需要什么
+
+| 依赖 | 怎么装 |
+|---|---|
+| **Android SDK** | Android Studio 的 SDK Manager，或 `sdkmanager` commandline-tools |
+| ├ `platform-tools` | 提供 `adb`（`-Install` 用） |
+| ├ `platforms;android-35` | 编译目标（`android.jar` 来源） |
+| └ `build-tools;35.0.0` | `aapt2` / `d8` / `zipalign` / `apksigner` |
+| **JDK 17+** | `winget install Microsoft.OpenJDK.21` |
+
+**脚本会自动探测** SDK 和 JDK 的位置，优先级：
+
+1. 环境变量 `ANDROID_SDK_ROOT` / `ANDROID_HOME` / `JAVA_HOME`
+2. 常见安装位置（`%LOCALAPPDATA%\Android\Sdk`、`C:\Program Files\Java\jdk-*` 等）
+3. `PATH` 里的 `javac`
+
+**探测不到会直接报错并告诉你怎么设**，不会静默用错路径。
+
+### 签名
+
+仓库里**不带 keystore**（那是私钥，不能提交）。首次构建会自动生成一个：
+
+```powershell
+# 想用固定密码（推荐，否则换密码就不能覆盖升级了）
+$env:KATORCH_KS_PASS = '你的密码'
+powershell -ExecutionPolicy Bypass -File .\build.ps1
+```
+
+不设的话会随机生成 20 位并打印出来，**记得存好**。
+
+生成的 keystore 是 `app/comfyui.jks`，已在 `.gitignore` 里。
 
 ## 配置
 
@@ -83,11 +111,17 @@ powershell -ExecutionPolicy Bypass -File F:\KAtorch\katorch_app\build.ps1 -Insta
 | 包名 | `com.katorch.npu`（内部标识，界面不可见；改它要重装并重新授权 root） |
 | 启动 Activity | `.MainActivity` |
 | 前端地址 | `http://127.0.0.1:8188` |
-| 启动脚本 | `/data/data/com.termux/files/home/npt/ka_app_start.sh` |
+| 启动脚本 | `~/npt/ka_app_start.sh`（Termux home 下） |
 | 停止逻辑 | 内联在 `StopService`，不依赖文件 |
 
-**root 授权**：Magisk 里 `com.katorch.npu`（uid 10184）已经预授权（policy=2），
-不会每次弹窗。撤销：`magisk --sqlite "DELETE FROM policies WHERE uid=10184"`。
+**root 授权**：需要给包名 `com.katorch.npu` 授权（Magisk 会记 uid）。
+预授权命令：
+
+```sh
+su -c "magisk --sqlite \"UPDATE policies SET policy=2 WHERE uid=$(pm list packages -U | grep com.katorch.npu | sed 's/.*uid://')\""
+```
+
+撤销：`su -c "magisk --sqlite \"DELETE FROM policies WHERE uid=<那个 uid>\""`
 
 ## 性能与输入（2026-11-15 调优）
 
