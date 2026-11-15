@@ -45,27 +45,67 @@ function Find-Sdk {
 }
 
 function Find-Jdk {
+    # 1. 环境变量（最可靠）
     foreach ($v in @($env:JAVA_HOME, $env:JDK_HOME)) {
         if ($v -and (Test-Path (Join-Path $v 'bin\javac.exe'))) { return $v }
     }
-    # 从 PATH 找 javac
-    $jc = Get-Command javac.exe -ErrorAction SilentlyContinue
-    if ($jc) { return (Split-Path (Split-Path $jc.Source -Parent) -Parent) }
-    # 常见位置
-    $cands = @(
-        'C:\Program Files\Java\jdk-21',
-        'C:\Program Files\Java\jdk-17',
-        'C:\Program Files\Android\Android Studio\jbr'
+
+    # 2. 注册表里的 JDK 安装记录（Oracle/OpenJDK 都会写）
+    $regRoots = @(
+        'HKLM:\SOFTWARE\JavaSoft\JDK',
+        'HKLM:\SOFTWARE\JavaSoft\Java Development Kit',
+        'HKLM:\SOFTWARE\Eclipse Adoptium\JDK',
+        'HKLM:\SOFTWARE\Microsoft\JDK'
     )
-    foreach ($c in $cands) {
-        if (Test-Path (Join-Path $c 'bin\javac.exe')) { return $c }
+    foreach ($r in $regRoots) {
+        if (-not (Test-Path $r)) { continue }
+        $vers = Get-ChildItem $r -ErrorAction SilentlyContinue | Sort-Object Name -Descending
+        foreach ($v in $vers) {
+            $hp = (Get-ItemProperty $v.PSPath -ErrorAction SilentlyContinue).JavaHome
+            if ($hp -and (Test-Path (Join-Path $hp 'bin\javac.exe'))) { return $hp }
+        }
     }
-    # 扫 Program Files\Java 下所有 jdk-*
-    if (Test-Path 'C:\Program Files\Java') {
-        $d = Get-ChildItem 'C:\Program Files\Java' -Directory -Filter 'jdk*' -ErrorAction SilentlyContinue |
-             Sort-Object Name -Descending | Select-Object -First 1
-        if ($d -and (Test-Path (Join-Path $d.FullName 'bin\javac.exe'))) { return $d.FullName }
+
+    # 3. 直接扫常见 JDK 目录（不要走 PATH —— 那可能指向 Oracle 的 javapath shim 目录）
+    foreach ($parent in @(
+        'C:\Program Files\Java',
+        'C:\Program Files\Eclipse Adoptium',
+        'C:\Program Files\Microsoft',
+        'C:\Program Files\Android\Android Studio'
+    )) {
+        if (-not (Test-Path $parent)) { continue }
+        foreach ($pat in @('jdk*', 'jdk-*', 'jbr')) {
+            $d = Get-ChildItem $parent -Directory -Filter $pat -ErrorAction SilentlyContinue |
+                 Sort-Object Name -Descending | Select-Object -First 1
+            if ($d -and (Test-Path (Join-Path $d.FullName 'bin\javac.exe'))) { return $d.FullName }
+            # Android Studio 的 jbr 在子目录
+            if ($d) {
+                $jbr = Join-Path $d.FullName 'jbr'
+                if (Test-Path (Join-Path $jbr 'bin\javac.exe')) { return $jbr }
+            }
+        }
     }
+
+    # 4. 最后才从 PATH 找，且要验证上两级真有 bin\javac.exe
+    #    （PATH 上常见的是 C:\Program Files\Common Files\Oracle\Java\javapath 这类 shim 目录，不是真 JDK）
+    $jc = Get-Command javac.exe -ErrorAction SilentlyContinue
+    if ($jc) {
+        $real = $null
+        try { $real = (Get-Item $jc.Source).Target } catch { }
+        if ($real) { $jcPath = $real } else { $jcPath = $jc.Source }
+        for ($i = 0; $i -lt 4; $i++) {
+            $jcPath = Split-Path $jcPath -Parent
+            if (-not $jcPath) { break }
+            if (Test-Path (Join-Path $jcPath 'bin\javac.exe')) {
+                # 排除 shim 目录（有的 JDK 根目录下也有 bin，要确认是 JDK 不是 JRE）
+                if ((Test-Path (Join-Path $jcPath 'bin\jar.exe')) -and
+                    (Test-Path (Join-Path $jcPath 'bin\keytool.exe'))) {
+                    return $jcPath
+                }
+            }
+        }
+    }
+
     return $null
 }
 
