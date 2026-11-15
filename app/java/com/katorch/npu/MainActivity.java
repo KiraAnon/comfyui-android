@@ -298,7 +298,7 @@ public class MainActivity extends Activity {
      *     这里记最后一次真实触摸，700ms 内没点过就说明是脚本抢的焦点，直接 blur。
      */
     private static final String DPR_JS =
-            "<script>(function(){try{var lim=1.0;"
+            "(function(){try{var lim=1.0;"
                     + "if((window.devicePixelRatio||1)>lim){"
                     + "try{Object.defineProperty(window,'devicePixelRatio',{configurable:true,get:function(){return lim;}});}catch(e){}"
                     + "}}catch(e){}"
@@ -330,7 +330,7 @@ public class MainActivity extends Activity {
                     + "  if(Date.now()-lastTouch>900){setTimeout(function(){try{t.blur();}catch(err){}},0);}"
                     + "},true);"
                     + "}catch(e){}"
-                    + "})();</script>";
+                    + "})();";
 
     /**
      * 工作流备份 / 恢复。
@@ -661,10 +661,14 @@ public class MainActivity extends Activity {
             }
             in.close();
             String html = bo.toString("UTF-8");
+            // DPR_JS 是纯 JS（对应 app/js/DPR_JS.js），拼进 head 时补上 script 标签。
+            // 这样它可以单独用 `node --check` 验语法——之前忘了包标签时整个脚本没执行，
+            // 限帧/防键盘都没生效，排查了很久。
+            String headJs = "<script>" + DPR_JS + "</script>";
             if (html.contains("<head>")) {
-                html = html.replace("<head>", "<head>" + DPR_JS);
+                html = html.replace("<head>", "<head>" + headJs);
             } else {
-                html = DPR_JS + html;
+                html = headJs + html;
             }
             return new WebResourceResponse("text/html", "utf-8",
                     new ByteArrayInputStream(html.getBytes("UTF-8")));

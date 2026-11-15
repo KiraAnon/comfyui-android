@@ -44,6 +44,7 @@ ComfyUI 原生节点编辑器，能拖能连能跑
 comfyui-android/
 ├── app/                    安卓壳（WebView + 生命周期 + 自启）
 │   ├── java/               MainActivity / StopService
+│   ├── js/                 ★ 注入脚本（保存图片 / DPR / 视觉优化 / 键盘 / 备份）
 │   ├── res/                图标（ComfyUI 官方 logo 转 VectorDrawable）
 │   ├── build.ps1           构建脚本（aapt2 + javac + d8 + zipalign + apksigner）
 │   └── README.md           壳的实现细节与三个坑
@@ -55,8 +56,26 @@ comfyui-android/
 │   └── comfy_pwa_check.py      验证 PWA 是否生效
 ├── workflows/              示例工作流（API 格式）
 ├── tools/                  辅助工具
-└── docs/                   安装、排错、性能与踩坑记录
+└── docs/                   安装、排错、目录结构、踩坑记录
 ```
+
+**⚠️ 重要**：本仓库**不包含** ComfyUI 本体、模型、LoRA、插件——那些是运行时环境，
+在手机上现装。**它们在手机上放哪，见 [docs/comfyui-layout.md](docs/comfyui-layout.md)**。
+
+```
+手机上（运行时，不是本仓库）
+~/ComfyUI/
+├── models/            模型库（26 个分类）
+│   ├── diffusion_models/   ★ DiT 底模
+│   ├── clip/               ★ 文本编码器
+│   ├── vae/                ★ VAE
+│   └── loras/              ★ LoRA（支持子目录）
+├── custom_nodes/      ★ 插件 / 节点库
+├── user/default/workflows/  ★ 工作流
+├── input/  output/  temp/
+```
+
+**目录约定和 PC 上的 ComfyUI 完全一样**（都是上游规范）。
 
 ---
 

@@ -1,0 +1,1 @@
+(function(){if(window.__kaKbLoad)return;window.__kaKbLoad=1;var s=document.createElement('script');s.src='/rime/keyboard.js?v='+Date.now();s.onload=function(){console.log('[KA] keyboard script loaded');};s.onerror=function(){console.log('[KA] keyboard script FAILED');};document.body.appendChild(s);})();
